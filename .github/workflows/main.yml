@@ -1,3 +1,4 @@
+
 name: Build and Deploy to Tomcat 9
 
 on:
@@ -10,7 +11,6 @@ jobs:
     runs-on: [self-hosted, dev]
 
     env:
-      WAR_NAME: "ROOT.war"
       TOMCAT_WEBAPPS: "/var/lib/tomcat9/webapps"
 
     steps:
@@ -23,10 +23,33 @@ jobs:
       - name: Build WAR using build.sh
         run: ./build.sh
 
+      - name: Locate built WAR and prepare ROOT.war
+        run: |
+          echo "Listing repo root:"
+          ls -la
+          echo "Listing target dir:"
+          ls -la target || true
+
+          # Find the generated WAR (adjust pattern if needed)
+          WAR_FILE=$(ls target/*.war | head -n 1 || true)
+          if [ -z "$WAR_FILE" ]; then
+            echo "ERROR: No WAR found under target/. Check build.sh output."
+            exit 1
+          fi
+
+          echo "Found WAR: $WAR_FILE"
+          cp "$WAR_FILE" ROOT.war
+          ls -la ROOT.war
+
       - name: Deploy WAR to Tomcat
         run: |
+          # Clean existing apps
           sudo rm -rf "$TOMCAT_WEBAPPS"/*
-          sudo cp "$WAR_NAME" "$TOMCAT_WEBAPPS"
+          # Copy and rename to ROOT.war so it deploys at context root
+          sudo cp ROOT.war "$TOMCAT_WEBAPPS/ROOT.war"
+          ls -la "$TOMCAT_WEBAPPS"
 
       - name: Restart Tomcat
-        run: sudo systemctl restart tomcat9
+        run: |
+          sudo systemctl restart tomcat9
+          sudo systemctl status --no-pager tomcat9 || true
