@@ -1,4 +1,3 @@
-
 name: Build and Deploy to Tomcat 9
 
 on:
@@ -32,7 +31,8 @@ jobs:
           set -euxo pipefail
           ./build.sh
 
-      - name: Verify build output and locate ROOT.war
+      - name: Verify build output and export WAR_PATH
+        id: find-war
         run: |
           set -euxo pipefail
           echo "Listing repo root:"
@@ -55,16 +55,16 @@ jobs:
           fi
 
           echo "Found WAR at: $WAR_PATH"
-          # Normalize for deployment step
-          cp "$WAR_PATH" ./ROOT.war
-          ls -la ./ROOT.war
+          # Export for subsequent steps
+          echo "WAR_PATH=$WAR_PATH" >> "$GITHUB_ENV"
 
       - name: Deploy WAR to Tomcat (safe cleanup)
         run: |
           set -euxo pipefail
+          echo "Using WAR at: $WAR_PATH"
           # Remove only the ROOT app to avoid wiping manager/host-manager
           sudo rm -rf "$TOMCAT_WEBAPPS/ROOT" "$TOMCAT_WEBAPPS/ROOT.war"
-          sudo cp ./ROOT.war "$TOMCAT_WEBAPPS/ROOT.war"
+          sudo cp "$WAR_PATH" "$TOMCAT_WEBAPPS/ROOT.war"
           ls -la "$TOMCAT_WEBAPPS"
 
       - name: Restart Tomcat
