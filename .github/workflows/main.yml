@@ -10,66 +10,23 @@ jobs:
     runs-on: [self-hosted, dev]
 
     env:
+      WAR_NAME: "ROOT.war"
       TOMCAT_WEBAPPS: "/var/lib/tomcat9/webapps"
 
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Verify JDK and tools on runner
-        run: |
-          set -euxo pipefail
-          java -version
-          javac -version
-          which jar || (echo "ERROR: 'jar' tool not found (needs JDK)."; exit 1)
-
       - name: Make build.sh executable
         run: chmod +x build.sh
 
       - name: Build WAR using build.sh
+        run: ./build.sh
+
+      - name: Deploy WAR to Tomcat
         run: |
-          set -euxo pipefail
-          ./build.sh
-
-      - name: Verify build output and export WAR_PATH
-        id: find-war
-        run: |
-          set -euxo pipefail
-          echo "Listing repo root:"
-          ls -la
-          echo "Listing src dir:"
-          ls -la src || true
-
-          WAR_PATH=""
-          if [ -f "./ROOT.war" ]; then
-            WAR_PATH="./ROOT.war"
-          elif [ -f "src/ROOT.war" ]; then
-            WAR_PATH="src/ROOT.war"
-          else
-            WAR_PATH=$(find . -maxdepth 3 -type f -name "ROOT.war" | head -n 1 || true)
-          fi
-
-          if [ -z "$WAR_PATH" ]; then
-            echo "ERROR: ROOT.war not found. Check build.sh logs."
-            exit 1
-          fi
-
-          echo "Found WAR at: $WAR_PATH"
-          # Export for subsequent steps
-          echo "WAR_PATH=$WAR_PATH" >> "$GITHUB_ENV"
-
-      - name: Deploy WAR to Tomcat (safe cleanup)
-        run: |
-          set -euxo pipefail
-          echo "Using WAR at: $WAR_PATH"
-          # Remove only the ROOT app to avoid wiping manager/host-manager
-          sudo rm -rf "$TOMCAT_WEBAPPS/ROOT" "$TOMCAT_WEBAPPS/ROOT.war"
-          sudo cp "$WAR_PATH" "$TOMCAT_WEBAPPS/ROOT.war"
-          ls -la "$TOMCAT_WEBAPPS"
+          sudo rm -rf "$TOMCAT_WEBAPPS"/*
+          sudo cp "$WAR_NAME" "$TOMCAT_WEBAPPS"
 
       - name: Restart Tomcat
-        run: |
-          set -euxo pipefail
-          # Adjust service name if your distro uses a different unit (e.g., tomcat9.service)
-          sudo systemctl restart tomcat9
-          sudo systemctl status --no-pager tomcat9 || true
+        run: sudo systemctl restart tomcat9
