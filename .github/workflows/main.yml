@@ -1,0 +1,32 @@
+name: Build and Deploy to Tomcat 9
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: [self-hosted, dev]
+
+    env:
+      WAR_NAME: "ROOT.war"
+      TOMCAT_WEBAPPS: "/var/lib/tomcat9/webapps"
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Make build.sh executable
+        run: chmod +x build.sh
+
+      - name: Build WAR using build.sh
+        run: ./build.sh
+
+      - name: Deploy WAR to Tomcat
+        run: |
+          sudo rm -rf "$TOMCAT_WEBAPPS"/*
+          sudo cp "$WAR_NAME" "$TOMCAT_WEBAPPS"
+
+      - name: Restart Tomcat
+        run: sudo systemctl restart tomcat9
