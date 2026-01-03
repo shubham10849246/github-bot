@@ -17,39 +17,59 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
+      - name: Verify JDK and tools on runner
+        run: |
+          set -euxo pipefail
+          java -version
+          javac -version
+          which jar || (echo "ERROR: 'jar' tool not found (needs JDK)."; exit 1)
+
       - name: Make build.sh executable
         run: chmod +x build.sh
 
       - name: Build WAR using build.sh
-        run: ./build.sh
-
-      - name: Locate built WAR and prepare ROOT.war
         run: |
+          set -euxo pipefail
+          ./build.sh
+
+      - name: Verify build output and locate ROOT.war
+        run: |
+          set -euxo pipefail
           echo "Listing repo root:"
           ls -la
-          echo "Listing target dir:"
-          ls -la target || true
+          echo "Listing src dir:"
+          ls -la src || true
 
-          # Find the generated WAR (adjust pattern if needed)
-          WAR_FILE=$(ls target/*.war | head -n 1 || true)
-          if [ -z "$WAR_FILE" ]; then
-            echo "ERROR: No WAR found under target/. Check build.sh output."
+          WAR_PATH=""
+          if [ -f "./ROOT.war" ]; then
+            WAR_PATH="./ROOT.war"
+          elif [ -f "src/ROOT.war" ]; then
+            WAR_PATH="src/ROOT.war"
+          else
+            WAR_PATH=$(find . -maxdepth 3 -type f -name "ROOT.war" | head -n 1 || true)
+          fi
+
+          if [ -z "$WAR_PATH" ]; then
+            echo "ERROR: ROOT.war not found. Check build.sh logs."
             exit 1
           fi
 
-          echo "Found WAR: $WAR_FILE"
-          cp "$WAR_FILE" ROOT.war
-          ls -la ROOT.war
+          echo "Found WAR at: $WAR_PATH"
+          # Normalize for deployment step
+          cp "$WAR_PATH" ./ROOT.war
+          ls -la ./ROOT.war
 
-      - name: Deploy WAR to Tomcat
+      - name: Deploy WAR to Tomcat (safe cleanup)
         run: |
-          # Clean existing apps
-          sudo rm -rf "$TOMCAT_WEBAPPS"/*
-          # Copy and rename to ROOT.war so it deploys at context root
-          sudo cp ROOT.war "$TOMCAT_WEBAPPS/ROOT.war"
+          set -euxo pipefail
+          # Remove only the ROOT app to avoid wiping manager/host-manager
+          sudo rm -rf "$TOMCAT_WEBAPPS/ROOT" "$TOMCAT_WEBAPPS/ROOT.war"
+          sudo cp ./ROOT.war "$TOMCAT_WEBAPPS/ROOT.war"
           ls -la "$TOMCAT_WEBAPPS"
 
       - name: Restart Tomcat
         run: |
+          set -euxo pipefail
+          # Adjust service name if your distro uses a different unit (e.g., tomcat9.service)
           sudo systemctl restart tomcat9
           sudo systemctl status --no-pager tomcat9 || true
