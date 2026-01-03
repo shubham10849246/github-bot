@@ -1,3 +1,4 @@
+
 #!/usr/bin/env bash
 # Robust build script for packaging a WAR as ROOT.war
 # Compiles Java sources into WEB-INF/classes and packages JSP/static assets + WEB-INF.
@@ -101,4 +102,3 @@ mv -f ROOT.war "$SCRIPT_DIR/"
 
 echo "."
 echo "SUCCESS: Built ROOT.war at $SCRIPT_DIR/ROOT.war"
-``
